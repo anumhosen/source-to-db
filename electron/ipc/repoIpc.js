@@ -5,84 +5,108 @@ const fs = require('fs');
 const REPOS_CACHE_DIR = path.join(require('electron').app.getPath('userData'), 'cached_repos');
 
 function registerRepoIpc(state) {
-    // Add local repository
-    ipcMain.handle('repo:addLocal', async () => {
-        if (!state.db || !state.repoManager) {
-            throw new Error('No database open');
-        }
+  // Add local repository
+  ipcMain.handle('repo:addLocal', async () => {
+    console.log('IPC: repo:addLocal called');
 
-        const result = await dialog.showOpenDialog({
-            title: 'Select Local Repository Folder',
-            properties: ['openDirectory'],
-        });
+    if (!state.db || !state.repoManager) {
+      console.error('IPC Error: No database or repoManager', {
+        hasDb: !!state.db,
+        hasRepoManager: !!state.repoManager,
+      });
+      throw new Error('No database open');
+    }
 
-        if (result.canceled || result.filePaths.length === 0) return null;
-
-        const folderPath = result.filePaths[0];
-        const repoId = await state.repoManager.addLocalRepo(folderPath);
-        return state.db.getRepository(repoId);
+    const result = await dialog.showOpenDialog({
+      title: 'Select Local Repository Folder',
+      properties: ['openDirectory'],
     });
 
-    // Add git repository
-    ipcMain.handle('repo:addGit', async (event, remoteUrl) => {
-        if (!state.db || !state.repoManager) {
-            throw new Error('No database open');
-        }
+    if (result.canceled || result.filePaths.length === 0) {
+      console.log('User canceled folder selection');
+      return null;
+    }
 
-        if (!remoteUrl || typeof remoteUrl !== 'string') {
-            throw new Error('Invalid Git URL');
-        }
+    const folderPath = result.filePaths[0];
+    console.log('Adding local repo:', folderPath);
 
-        // Ensure cache directory exists
-        if (!fs.existsSync(REPOS_CACHE_DIR)) {
-            fs.mkdirSync(REPOS_CACHE_DIR, { recursive: true });
-        }
+    try {
+      const repoId = await state.repoManager.addLocalRepo(folderPath);
+      console.log('Local repo added with ID:', repoId);
+      return state.db.getRepository(repoId);
+    } catch (error) {
+      console.error('Failed to add local repo:', error);
+      throw error;
+    }
+  });
 
-        const repoId = await state.repoManager.addGitRepo(remoteUrl, REPOS_CACHE_DIR);
-        return state.db.getRepository(repoId);
+  // Add git repository
+  ipcMain.handle('repo:addGit', async (event, remoteUrl) => {
+    console.log('IPC: repo:addGit called with URL:', remoteUrl);
+
+    if (!state.db || !state.repoManager) {
+      console.error('IPC Error: No database or repoManager', {
+        hasDb: !!state.db,
+        hasRepoManager: !!state.repoManager,
+      });
+      throw new Error('No database open');
+    }
+
+    if (!remoteUrl || typeof remoteUrl !== 'string' || !remoteUrl.trim()) {
+      console.error('IPC Error: Invalid Git URL');
+      throw new Error('Invalid Git URL');
+    }
+
+    // Ensure cache directory exists
+    const cacheDir = REPOS_CACHE_DIR;
+    console.log('Cache directory:', cacheDir);
+
+    if (!fs.existsSync(cacheDir)) {
+      console.log('Creating cache directory');
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    try {
+      console.log('Cloning git repo...');
+      const repoId = await state.repoManager.addGitRepo(remoteUrl.trim(), cacheDir);
+      console.log('Git repo added with ID:', repoId);
+      return state.db.getRepository(repoId);
+    } catch (error) {
+      console.error('Failed to add git repo:', error);
+      throw new Error(`Failed to clone repository: ${error.message}`);
+    }
+  });
+
+  // Delete repository
+  ipcMain.handle('repo:delete', async (event, repoId) => {
+    if (!state.db) throw new Error('No database open');
+    state.db.deleteRepository(repoId);
+    return true;
+  });
+
+  // Get files for repository
+  ipcMain.handle('repo:files', async (event, repoId) => {
+    if (!state.db) throw new Error('No database open');
+    return state.db.getSourcesByRepo(repoId);
+  });
+
+  // Export files
+  ipcMain.handle('repo:export', async (event, repoId, fileIds) => {
+    if (!state.db || !state.repoManager) {
+      throw new Error('No database open');
+    }
+
+    const result = await dialog.showOpenDialog({
+      title: 'Select Export Destination',
+      properties: ['openDirectory'],
     });
 
-    // Delete repository
-    ipcMain.handle('repo:delete', async (event, repoId) => {
-        if (!state.db) throw new Error('No database open');
-        state.db.deleteRepository(repoId);
-        return true;
-    });
+    if (result.canceled || result.filePaths.length === 0) return null;
 
-    // Get files for repository
-    ipcMain.handle('repo:files', async (event, repoId) => {
-        if (!state.db) throw new Error('No database open');
-        return state.db.getSourcesByRepo(repoId);
-    });
-
-    // Get all file contents for repository
-    ipcMain.handle('repo:allFileContents', async (event, repoId) => {
-        if (!state.db) throw new Error('No database open');
-        const sources = state.db.getSourcesByRepo(repoId);
-        const fullSources = [];
-        for (const src of sources) {
-            fullSources.push(state.db.getSource(src.id));
-        }
-        return fullSources;
-    });
-
-    // Export files
-    ipcMain.handle('repo:export', async (event, repoId, fileIds) => {
-        if (!state.db || !state.repoManager) {
-            throw new Error('No database open');
-        }
-
-        const result = await dialog.showOpenDialog({
-            title: 'Select Export Destination',
-            properties: ['openDirectory'],
-        });
-
-        if (result.canceled || result.filePaths.length === 0) return null;
-
-        const outputDir = result.filePaths[0];
-        const count = state.repoManager.exportFiles(repoId, outputDir, fileIds);
-        return { exported: count, outputDir };
-    });
+    const outputDir = result.filePaths[0];
+    const count = state.repoManager.exportFiles(repoId, outputDir, fileIds);
+    return { exported: count, outputDir };
+  });
 }
 
 module.exports = { registerRepoIpc };
