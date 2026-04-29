@@ -1,0 +1,48 @@
+{
+    "name": "repodocs-electron",
+    "version": "1.0.0",
+    "description": "RepoDocs Electron main process",
+    "main": "main.js",
+    "scripts": {
+        "dev": "cross-env NODE_ENV=development electron .",
+        "build": "electron-builder",
+        "postinstall": "electron-builder install-app-deps"
+    },
+    "build": {
+        "appId": "com.repodocs.app",
+        "productName": "RepoDocs",
+        "directories": {
+            "output": "../release"
+        },
+        "files": [
+            "main.js",
+            "preload.js",
+            "backend/**/*",
+            "dist/**/*",
+            "node_modules/**/*"
+        ],
+        "asar": true,
+        "win": {
+            "target": "nsis"
+        },
+        "mac": {
+            "target": "dmg"
+        },
+        "linux": {
+            "target": "deb"
+        }
+    },
+    "devDependencies": {
+        "electron": "^30.5.1",
+        "electron-builder": "^26.8.1"
+    },
+    "dependencies": {
+        "@google/generative-ai": "^0.24.1",
+        "better-sqlite3": "^12.9.0",
+        "cross-env": "^10.1.0",
+        "docx": "^9.6.1",
+        "highlight.js": "^11.11.1",
+        "html-docx-js": "^0.3.1",
+        "simple-git": "^3.36.0"
+    }
+}
