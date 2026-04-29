@@ -1,144 +1,264 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { VscChevronRight, VscChevronDown, VscCode, VscFileCode } from 'react-icons/vsc';
 
-// Build tree structure from flat file list
-const buildTree = (files) => {
-    if (!files || !Array.isArray(files)) return {};
+/**
+ * Build a nested file tree from flat file list
+ */
+function buildFileTree(files) {
+  if (!files || !Array.isArray(files)) return {};
 
-    const root = {};
+  const tree = {};
+  files.forEach((file) => {
+    if (!file || !file.filepath) return;
+    const parts = file.filepath.split('/');
+    let current = tree;
+    parts.forEach((part, i) => {
+      if (i === parts.length - 1) {
+        if (!current._files) current._files = [];
+        current._files.push(file);
+      } else {
+        if (!current[part]) current[part] = {};
+        current = current[part];
+      }
+    });
+  });
+  return tree;
+}
 
-    files.forEach((f) => {
-        if (!f || !f.filepath) return;
+/**
+ * Recursive tree node renderer
+ */
+function TreeNode({
+  name,
+  node,
+  path = '',
+  depth = 0,
+  onSelect,
+  selectedId,
+  expandedDirs,
+  onToggle,
+}) {
+  // Directory node
+  if (!node.id && !node._isFile) {
+    const isExpanded = expandedDirs.has(path || name);
+    const childEntries = Object.entries(node).filter(([key]) => key !== '_files');
+    const childFiles = node._files || [];
 
-        const parts = f.filepath.split('/');
-        let current = root;
+    return (
+      <div>
+        <button
+          onClick={() => onToggle(path || name)}
+          className='w-full flex items-center gap-1 px-2 py-1 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors'
+          style={{ paddingLeft: `${depth * 16 + 4}px` }}
+        >
+          {isExpanded ? (
+            <VscChevronDown className='w-3.5 h-3.5 flex-shrink-0' />
+          ) : (
+            <VscChevronRight className='w-3.5 h-3.5 flex-shrink-0' />
+          )}
+          <VscFileCode className='w-3.5 h-3.5 flex-shrink-0 text-gray-500' />
+          <span className='truncate'>{name}</span>
+        </button>
+        {isExpanded && (
+          <div>
+            {childEntries.map(([childName, childNode]) => (
+              <TreeNode
+                key={childName}
+                name={childName}
+                node={childNode}
+                path={path ? `${path}/${childName}` : childName}
+                depth={depth + 1}
+                onSelect={onSelect}
+                selectedId={selectedId}
+                expandedDirs={expandedDirs}
+                onToggle={onToggle}
+              />
+            ))}
+            {childFiles.map((file) => (
+              <FileNode
+                key={file.id}
+                file={file}
+                depth={depth + 1}
+                onSelect={onSelect}
+                selectedId={selectedId}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
-        parts.forEach((part, i) => {
-            if (!part) return;
+  // It's a file at root level
+  return <FileNode file={node} depth={depth} onSelect={onSelect} selectedId={selectedId} />;
+}
 
-            if (i === parts.length - 1) {
-                // Leaf node (file)
-                current[part] = { ...f, _isFile: true };
-            } else {
-                // Directory node
-                if (!current[part] || current[part]._isFile) {
-                    current[part] = {};
-                }
-                current = current[part];
-            }
-        });
+/**
+ * File node renderer
+ */
+function FileNode({ file, depth, onSelect, selectedId }) {
+  const isActive = selectedId === file.id;
+  const hasAI = file.header;
+
+  return (
+    <button
+      onClick={() => onSelect(file.id)}
+      className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors
+              ${
+                isActive
+                  ? 'bg-indigo-900/30 text-indigo-300 border border-indigo-800'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              }`}
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <VscCode
+        className={`w-3.5 h-3.5 flex-shrink-0 ${hasAI ? 'text-green-500' : 'text-gray-500'}`}
+      />
+      <span className='truncate flex-1 text-left'>{file.filename}</span>
+      {hasAI && <span className='text-xs text-green-500'>AI</span>}
+    </button>
+  );
+}
+
+/**
+ * Main FileTree component
+ */
+export default function FileTree({ files, onSelect, selectedId, searchQuery = '' }) {
+  const [expandedDirs, setExpandedDirs] = useState(new Set());
+
+  // Build file tree
+  const fileTree = useMemo(() => {
+    return buildFileTree(files);
+  }, [files]);
+
+  // Filter files by search
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery || !searchQuery.trim()) return files;
+    const query = searchQuery.toLowerCase();
+    return files.filter(
+      (f) =>
+        f.filename.toLowerCase().includes(query) ||
+        f.filepath.toLowerCase().includes(query) ||
+        (f.header && f.header.toLowerCase().includes(query)),
+    );
+  }, [files, searchQuery]);
+
+  // Auto-expand first level if single directory
+  useMemo(() => {
+    if (files && files.length > 0 && expandedDirs.size === 0) {
+      const entries = Object.entries(fileTree).filter(([key]) => key !== '_files');
+      const rootFiles = fileTree._files || [];
+
+      if (entries.length === 1 && rootFiles.length === 0) {
+        const [dirName] = entries[0];
+        setExpandedDirs(new Set([dirName]));
+      }
+    }
+  }, [files, fileTree]);
+
+  const toggleDir = (path) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  // Render tree
+  const renderTree = (node, parentPath = '') => {
+    const items = [];
+
+    // Render directories
+    Object.entries(node).forEach(([key, value]) => {
+      if (key === '_files') return;
+      const fullPath = parentPath ? `${parentPath}/${key}` : key;
+      const isExpanded = expandedDirs.has(fullPath);
+
+      items.push(
+        <div key={fullPath}>
+          <button
+            onClick={() => toggleDir(fullPath)}
+            className='w-full flex items-center gap-1 px-2 py-1 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded transition-colors'
+          >
+            {isExpanded ? (
+              <VscChevronDown className='w-3.5 h-3.5 flex-shrink-0' />
+            ) : (
+              <VscChevronRight className='w-3.5 h-3.5 flex-shrink-0' />
+            )}
+            <VscFileCode className='w-3.5 h-3.5 flex-shrink-0 text-gray-500' />
+            <span className='truncate'>{key}</span>
+          </button>
+          {isExpanded && <div className='ml-3'>{renderTree(value, fullPath)}</div>}
+        </div>,
+      );
     });
 
-    return root;
-};
+    // Render files at this level
+    if (node._files) {
+      node._files.forEach((file) => {
+        const isActive = selectedId === file.id;
+        const hasAI = file.header;
 
-// Recursive tree node component
-const TreeNode = ({ name, node, depth = 0, onSelect, selectedId }) => {
-    const [isOpen, setIsOpen] = useState(true);
-
-    if (!node) return null;
-
-    // File node
-    if (node._isFile) {
-        return (
-            <div
-                className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-sm transition-colors
-          ${
-              selectedId === node.id
-                  ? 'bg-gray-700 text-gray-100'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-          }`}
-                style={{ paddingLeft: `${depth * 16 + 8}px` }}
-                onClick={() => onSelect(node.id)}
-            >
-                <svg
-                    className='w-4 h-4 flex-shrink-0 text-gray-500'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                >
-                    <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth='2'
-                        d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-                    />
-                </svg>
-                <span className='truncate'>{name}</span>
-            </div>
+        items.push(
+          <button
+            key={file.id}
+            onClick={() => onSelect(file.id)}
+            className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors
+              ${
+                isActive
+                  ? 'bg-indigo-900/30 text-indigo-300 border border-indigo-800'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+              }`}
+          >
+            <VscCode
+              className={`w-3.5 h-3.5 flex-shrink-0 ${hasAI ? 'text-green-500' : 'text-gray-500'}`}
+            />
+            <span className='truncate flex-1 text-left'>{file.filename}</span>
+            {hasAI && <span className='text-xs text-green-500'>AI</span>}
+          </button>,
         );
+      });
     }
 
-    // Directory node
-    const children = Object.entries(node);
+    return items;
+  };
 
-    return (
-        <div>
-            <div
-                className='flex items-center gap-2 px-2 py-1 cursor-pointer text-sm text-gray-400 hover:bg-gray-800 hover:text-gray-200 transition-colors'
-                style={{ paddingLeft: `${depth * 16 + 8}px` }}
-                onClick={() => setIsOpen(!isOpen)}
+  return (
+    <div className='h-full overflow-y-auto p-2'>
+      {!files || files.length === 0 ? (
+        <div className='flex items-center justify-center h-full'>
+          <p className='text-sm text-gray-500'>No files found</p>
+        </div>
+      ) : searchQuery ? (
+        // Flat list for search results
+        filteredFiles.length === 0 ? (
+          <div className='flex items-center justify-center h-full'>
+            <p className='text-sm text-gray-500'>No files match "{searchQuery}"</p>
+          </div>
+        ) : (
+          filteredFiles.map((file) => (
+            <button
+              key={file.id}
+              onClick={() => onSelect(file.id)}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded transition-colors mb-0.5
+                      ${
+                        selectedId === file.id
+                          ? 'bg-indigo-900/30 text-indigo-300'
+                          : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                      }`}
             >
-                <svg
-                    className={`w-3 h-3 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                >
-                    <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth='2'
-                        d='M9 5l7 7-7 7'
-                    />
-                </svg>
-                <svg
-                    className='w-4 h-4 flex-shrink-0 text-gray-500'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                >
-                    <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
-                        strokeWidth='2'
-                        d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'
-                    />
-                </svg>
-                <span className='truncate font-medium'>{name}</span>
-            </div>
-            {isOpen &&
-                children.map(([childName, childNode]) => (
-                    <TreeNode
-                        key={childName}
-                        name={childName}
-                        node={childNode}
-                        depth={depth + 1}
-                        onSelect={onSelect}
-                        selectedId={selectedId}
-                    />
-                ))}
-        </div>
-    );
-};
-
-export default function FileTree({ files, onSelect, selectedId }) {
-    const tree = buildTree(files);
-
-    if (!files || files.length === 0) {
-        return <div className='p-4 text-gray-500 text-sm'>No files found</div>;
-    }
-
-    return (
-        <div className='h-full overflow-y-auto p-2'>
-            {Object.entries(tree).map(([name, node]) => (
-                <TreeNode
-                    key={name}
-                    name={name}
-                    node={node}
-                    onSelect={onSelect}
-                    selectedId={selectedId}
-                />
-            ))}
-        </div>
-    );
+              <VscCode className='w-3.5 h-3.5 flex-shrink-0' />
+              <span className='truncate'>{file.filepath}</span>
+            </button>
+          ))
+        )
+      ) : (
+        renderTree(fileTree)
+      )}
+    </div>
+  );
 }

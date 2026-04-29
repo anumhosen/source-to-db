@@ -20,6 +20,7 @@ import {
   VscRefresh,
   VscWarning,
 } from 'react-icons/vsc';
+import LocalRepoModal from '../components/LocalRepoModal';
 
 export default function Home() {
   const { dbPath, setDbPath, repos, refreshRepos } = useAppContext();
@@ -31,6 +32,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showGitModal, setShowGitModal] = useState(false);
+  const [showLocalModal, setShowLocalModal] = useState(false);
 
   // Load recent databases on mount
   useEffect(() => {
@@ -93,16 +95,28 @@ export default function Home() {
     }
   };
 
-  const handleAddLocal = async () => {
+  // Open modal instead of direct dialog
+  const handleAddLocal = () => {
+    if (!dbPath) {
+      setError('Please open a database first');
+      return;
+    }
+    setShowLocalModal(true);
+  };
+
+  // Handle the actual import from modal
+  const handleLocalRepoAdd = async (folderPath, version) => {
     try {
       setLoading(true);
-      const repo = await window.api.addLocalRepo();
+      const repo = await window.api.addLocalRepo(folderPath, version);
       if (repo) {
         await refreshRepos();
         navigate(`/editor/${repo.id}`);
       }
+      return repo;
     } catch (error) {
       setError('Failed to add local repo: ' + error.message);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -177,6 +191,12 @@ export default function Home() {
         isOpen={showGitModal}
         onClose={() => setShowGitModal(false)}
         onClone={handleGitClone}
+      />
+      {/* Local Repo Modal */}
+      <LocalRepoModal
+        isOpen={showLocalModal}
+        onClose={() => setShowLocalModal(false)}
+        onAdd={handleLocalRepoAdd}
       />
 
       {/* Error Banner */}

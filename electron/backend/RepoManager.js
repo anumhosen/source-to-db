@@ -27,13 +27,12 @@ class RepoManager {
   }
 
   /**
-   * Import a local folder as a repository.
+   * Import a local folder as a repository
    */
-  async addLocalRepo(folderPath) {
+  async addLocalRepo(folderPath, version = 'local') {
     console.log('RepoManager: Adding local repo from', folderPath);
 
     const name = path.basename(folderPath);
-    const version = 'local';
     const source = 'local';
 
     const repoId = this.db.addRepository(name, folderPath, version, source);
