@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import FileTree from '../components/FileTree';
 import CodeEditor from '../components/CodeEditor';
 import AIPanel from '../components/AIPanel';
-import { PanelGroup, PanelResizeHandle, Panel } from 'react-resizable-panels';
+import { Group, Separator, Panel } from 'react-resizable-panels';
 import {
   VscArrowLeft,
   VscSave,
@@ -284,16 +284,16 @@ export default function EditorView() {
               <VscLoading className='w-6 h-6 text-gray-500 animate-spin' />
             </div>
           ) : (
-            <PanelGroup direction='horizontal' className='gap-0.5'>
-              <Panel defaultSize={50}>
+            <Group direction='horizontal'>
+              <Panel defaultSize={50} collapsible>
                 <CodeEditor
                   code={fileContent?.code || ''}
                   language={fileContent?.filetype || 'text'}
                   onChange={handleCodeChange}
                 />
               </Panel>
-              <PanelResizeHandle className='bg-gray-800' />
-              <Panel defaultSize={50}>
+              <Separator className='bg-transparent w-1'  />
+              <Panel defaultSize={50} collapsible>
                 <AIPanel
                   fields={aiFields}
                   onChange={handleAiFieldsChange}
@@ -301,7 +301,7 @@ export default function EditorView() {
                   modelLoaded={modelStatus?.initialized}
                 />
               </Panel>
-            </PanelGroup>
+            </Group>
           )}
         </div>
       </div>

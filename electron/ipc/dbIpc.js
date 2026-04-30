@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const AppDatabase = require('../backend/Database');
 const RepoManager = require('../backend/RepoManager');
-const GeminiService = require('../backend/GeminiService');
 
 const RECENT_DBS_FILE = path.join(app.getPath('userData'), 'recent_databases.json');
 

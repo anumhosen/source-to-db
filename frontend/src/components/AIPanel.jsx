@@ -11,7 +11,7 @@ export default function AIPanel({ fields, onChange, onGenerate, modelLoaded }) {
   };
 
   return (
-    <div className='flex flex-col h-full bg-gray-900 rounded-lg border border-gray-800'>
+    <div className='flex flex-col h-full bg-gray-900 rounded-lg border border-gray-800 overflow-hidden'>
       <div className='flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700'>
         <span className='text-xs text-gray-500 uppercase tracking-wider'>Documentation</span>
         {!modelLoaded ? (

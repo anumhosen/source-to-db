@@ -8,7 +8,6 @@ import {
   VscInfo,
   VscVersions,
   VscRootFolder,
-  VscFileDirectory,
   VscFiles,
   VscSymbolField,
 } from 'react-icons/vsc';
